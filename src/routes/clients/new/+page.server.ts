@@ -1,6 +1,7 @@
 import { fail, redirect } from "@sveltejs/kit";
 import db from "$lib/db";
 import { addFirewallRule } from "$lib/ssh";
+import { registerClientIp } from "$lib/portal";
 import type { Actions } from "./$types";
 
 export const actions: Actions = {
@@ -40,6 +41,13 @@ export const actions: Actions = {
         } catch (e: any) {
           errors.push(`${srv.ip}: ${e.message}`);
         }
+      }
+
+      // Report the client's source IP to the Portal for tracking (non-fatal).
+      try {
+        await registerClientIp({ name, ip, tech_prefix, enabled: true });
+      } catch (e: any) {
+        errors.push(`portal: ${e.message}`);
       }
 
       if (errors.length > 0) {
