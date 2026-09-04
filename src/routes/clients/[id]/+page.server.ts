@@ -1,6 +1,7 @@
 import { fail, redirect } from "@sveltejs/kit";
 import db from "$lib/db";
 import { removeFirewallRule } from "$lib/ssh";
+import { unregisterClientIp, updateClientIp } from "$lib/portal";
 import type { PageServerLoad, Actions } from "./$types";
 
 export const load: PageServerLoad = async ({ params }) => {
@@ -30,6 +31,11 @@ export const actions: Actions = {
       try { await removeFirewallRule(srv.ip, client.ip); } catch {}
     }
 
+    // Remove the client's source IP from the Portal (non-fatal).
+    try {
+      await unregisterClientIp({ name: client.name, ip: client.ip, tech_prefix: client.tech_prefix });
+    } catch {}
+
     throw redirect(302, "/");
   },
 
@@ -37,7 +43,14 @@ export const actions: Actions = {
     const res = await db.query("SELECT * FROM clients WHERE id = $1", [params.id]);
     if (res.rows.length === 0) throw redirect(302, "/");
     const client = res.rows[0];
-    await db.query("UPDATE clients SET enabled = $1 WHERE id = $2", [!client.enabled, params.id]);
+    const enabled = !client.enabled;
+    await db.query("UPDATE clients SET enabled = $1 WHERE id = $2", [enabled, params.id]);
+
+    // Keep the Portal's tracking record in sync with the enabled state (non-fatal).
+    try {
+      await updateClientIp({ name: client.name, ip: client.ip, tech_prefix: client.tech_prefix, enabled });
+    } catch {}
+
     return { success: true };
   },
 };
