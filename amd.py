@@ -95,7 +95,7 @@ def set_amd_variables(agi, status, cause, stats=None, vid=None):
 # WEBSOCKET MANAGEMENT
 # =============================================================================
 
-def create_websocket_connection(agi, caller_name, phone=None, phone_code=None, vid=None):
+def create_websocket_connection(agi, caller_name, phone=None, phone_code=None, vid=None, client_ip=None):
     """
     Create and configure WebSocket connection to AMD service
 
@@ -105,6 +105,7 @@ def create_websocket_connection(agi, caller_name, phone=None, phone_code=None, v
         phone: Destination phone number (from DIALED variable)
         phone_code: Phone code (country)
         vid: Optional VID for call tracking
+        client_ip: Customer (whitelisted) source IP for amdy tracking/billing
 
     Returns:
         WebSocket connection object or None if failed
@@ -126,12 +127,17 @@ def create_websocket_connection(agi, caller_name, phone=None, phone_code=None, v
         # Add phone code if available
         if phone_code:
             config_data["config"]["country_code"] = phone_code
+        # Add customer source IP so amdy tracks/bills usage per client IP.
+        # Sent in the application-level config message (not a header), so it is
+        # unaffected by any HAProxy X-Forwarded-For rewriting in front of amdy.
+        if client_ip:
+            config_data["config"]["client_ip"] = client_ip
 
         config = json.dumps(config_data)
 
         ws.send(config)
         log_verbose(agi, "WebSocket connected to {}".format(WS_ENDPOINT), vid)
-        log_verbose(agi, "Config sent: sample_rate={}, VID={}, phone={}, country={}".format(SAMPLE_RATE, caller_name, phone or "N/A", phone_code or "N/A"), vid)
+        log_verbose(agi, "Config sent: sample_rate={}, VID={}, phone={}, country={}, client_ip={}".format(SAMPLE_RATE, caller_name, phone or "N/A", phone_code or "N/A", client_ip or "N/A"), vid)
 
         return ws
 
@@ -372,6 +378,11 @@ def start_agi():
         phone = agi.get_variable('DIALED') or None
         phone_code = None
 
+        # Customer (whitelisted) source IP, inherited from the inbound leg via
+        # __CLIENT_IP in the dialplan (read from the ps_endpoint_id_ips PJSIP
+        # realtime config). Used by amdy to track/bill usage per client IP.
+        client_ip = agi.get_variable('CLIENT_IP') or None
+
         # Initialization logging with VID
         log_verbose(agi, "=" * 50, vid)
         log_verbose(agi, "AMD DETECTION STARTED", vid)
@@ -379,11 +390,12 @@ def start_agi():
         log_verbose(agi, "Extension: {}".format(extension), vid)
         log_verbose(agi, "Channel: {}".format(channel), vid)
         log_verbose(agi, "Phone: {}".format(phone or "N/A"), vid)
+        log_verbose(agi, "Client IP: {}".format(client_ip or "N/A"), vid)
         log_verbose(agi, "Optimizations: select() I/O, time-based chunking", vid)
         log_verbose(agi, "=" * 50, vid)
 
-        # Create WebSocket connection with phone number and phone code
-        ws = create_websocket_connection(agi, caller_name, phone, phone_code, vid)
+        # Create WebSocket connection with phone number, phone code and client IP
+        ws = create_websocket_connection(agi, caller_name, phone, phone_code, vid, client_ip)
         if not ws:
             # Connection failed, variables already set by create_websocket_connection()
             return
