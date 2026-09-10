@@ -1,0 +1,23 @@
+# Asterisk logs — installed as /etc/logrotate.d/asterisk
+# Rotated on size at the hourly check (see /etc/cron.hourly/asterisk-logrotate)
+# and daily by the system logrotate run; 14 generations kept, compressed.
+#
+# `create` + `logger reload` is a rename plus reopen — cheap even on a busy
+# switch. copytruncate is deliberately NOT used: it would copy the whole file.
+/var/log/asterisk/full.log
+/var/log/asterisk/messages.log
+/var/log/asterisk/verbose.log
+{
+    daily
+    rotate 14
+    size 500M
+    missingok
+    notifempty
+    compress
+    delaycompress
+    create 0644 root root
+    sharedscripts
+    postrotate
+        /usr/sbin/asterisk -rx 'logger reload' > /dev/null 2>&1 || true
+    endscript
+}
