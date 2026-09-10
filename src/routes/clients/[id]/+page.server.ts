@@ -9,24 +9,31 @@ export const load: PageServerLoad = async ({ params }) => {
   if (res.rows.length === 0) throw redirect(302, "/");
 
   const assigned = await db.query(
-    `SELECT cg.gateway_id, cg.weight, cg.priority, g.name, g.ip, g.enabled
+    `SELECT cg.gateway_id, cg.weight, cg.priority, g.name, g.ip, g.port, g.enabled
        FROM client_gateways cg JOIN gateways g ON g.id = cg.gateway_id
       WHERE cg.client_id = $1
       ORDER BY cg.priority ASC, g.name ASC`,
     [params.id]
   );
   const available = await db.query(
-    `SELECT id, name, ip FROM gateways
+    `SELECT id, name, ip, port FROM gateways
       WHERE enabled = true
         AND id NOT IN (SELECT gateway_id FROM client_gateways WHERE client_id = $1)
       ORDER BY name ASC`,
     [params.id]
   );
 
+  // Shown when the client has no gateway of its own — that traffic goes to the
+  // default gateway (or the voip-switch fallback when none is set).
+  const def = await db.query(
+    "SELECT name, ip, port FROM gateways WHERE is_default = true AND enabled = true LIMIT 1"
+  );
+
   return {
     client: res.rows[0],
     assignedGateways: assigned.rows,
     availableGateways: available.rows,
+    defaultGateway: def.rows[0] || null,
   };
 };
 

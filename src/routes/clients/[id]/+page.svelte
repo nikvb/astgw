@@ -63,8 +63,14 @@
   <div style="background:#1e293b;padding:1.5rem;border-radius:6px;margin-top:1.5rem;">
     <h2 style="font-size:1.05rem;margin-bottom:0.25rem;">Gateways</h2>
     <p style="color:#94a3b8;font-size:0.8rem;margin-bottom:1rem;">
-      Outbound gateways for this client. If none are assigned, calls fall back to
-      <code style="color:#93c5fd;">voip-switch</code>.
+      Outbound gateways for this client. Assigned gateways are the only route used —
+      calls never fall back anywhere else. With none assigned, the client uses
+      {#if data.defaultGateway}
+        the default gateway <strong style="color:#e2e8f0;">{data.defaultGateway.name}</strong>
+        <code style="color:#93c5fd;">{data.defaultGateway.ip}:{data.defaultGateway.port}</code>.
+      {:else}
+        <code style="color:#93c5fd;">voip-switch</code>.
+      {/if}
     </p>
 
     <form method="POST" action="?/set_mode" style="display:flex;align-items:center;gap:0.5rem;margin-bottom:1rem;">
@@ -86,7 +92,7 @@
       <tbody>
         {#each data.assignedGateways as gw}
           <tr style="border-bottom:1px solid #0f172a;">
-            <td style="padding:0.4rem;font-weight:500;">{gw.name} <span style="font-family:monospace;color:#93c5fd;font-size:0.8rem;">{gw.ip}</span></td>
+            <td style="padding:0.4rem;font-weight:500;">{gw.name} <span style="font-family:monospace;color:#93c5fd;font-size:0.8rem;">{gw.ip}:{gw.port}</span></td>
             <td style="padding:0.4rem;">
               <form method="POST" action="?/update_gateway" style="display:flex;gap:0.4rem;align-items:center;">
                 <input type="hidden" name="gateway_id" value={gw.gateway_id} />
@@ -98,7 +104,7 @@
             </td>
           </tr>
         {:else}
-          <tr><td colspan="2" style="padding:1rem;text-align:center;color:#64748b;font-size:0.85rem;">No gateways assigned — using voip-switch.</td></tr>
+          <tr><td colspan="2" style="padding:1rem;text-align:center;color:#64748b;font-size:0.85rem;">No gateways assigned — using {data.defaultGateway ? data.defaultGateway.name + ' (default)' : 'voip-switch'}.</td></tr>
         {/each}
       </tbody>
     </table>
@@ -108,7 +114,7 @@
         <select name="gateway_id" required style="flex:1;min-width:160px;background:#0f172a;color:#e2e8f0;border:1px solid #334155;border-radius:4px;padding:0.35rem;">
           <option value="" disabled selected>Add a gateway…</option>
           {#each data.availableGateways as g}
-            <option value={g.id}>{g.name} ({g.ip})</option>
+            <option value={g.id}>{g.name} ({g.ip}:{g.port})</option>
           {/each}
         </select>
         <input type="number" name="weight" value="1" min="1" title="Weight" style="width:56px;background:#0f172a;color:#fbbf24;border:1px solid #334155;border-radius:4px;padding:0.35rem;" />

@@ -4,6 +4,8 @@ import type { PageServerLoad } from "./$types";
 
 export const load: PageServerLoad = async ({ locals }) => {
   if (!locals.user) throw redirect(302, "/login");
-  const gateways = await db.query("SELECT * FROM gateways ORDER BY created_at DESC");
+  const gateways = await db.query(
+    "SELECT * FROM gateways ORDER BY is_default DESC, created_at DESC"
+  );
   return { gateways: gateways.rows };
 };
