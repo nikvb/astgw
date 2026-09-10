@@ -168,15 +168,17 @@ silence_threshold=256
 maximum_word_length=5000
 CFGEOF"
 
-# logger.conf
-remote "cat > /etc/asterisk/logger.conf << 'CFGEOF'
-[general]
-dateformat=%F %T.%3q
+# logger.conf — copy from local files (single source of truth)
+scp_to "${SCRIPT_DIR}/logger.conf" "/etc/asterisk/logger.conf"
 
-[logfiles]
-console => notice,warning,error
-messages => notice,warning,error
-CFGEOF"
+# Log rotation. Without this, full.log grows without bound — debug-level
+# logging on a busy switch has produced 60 GB files. Rotation is checked
+# hourly as well as daily, because 500 MB can be reached well inside a day.
+scp_to "${SCRIPT_DIR}/logrotate-asterisk" "/etc/logrotate.d/asterisk"
+scp_to "${SCRIPT_DIR}/cron-hourly-asterisk-logrotate" "/etc/cron.hourly/asterisk-logrotate"
+remote "chmod 0644 /etc/logrotate.d/asterisk && \
+    chmod 0755 /etc/cron.hourly/asterisk-logrotate && \
+    logrotate -d /etc/logrotate.d/asterisk > /dev/null"
 
 # modules.conf
 remote "cat > /etc/asterisk/modules.conf << 'CFGEOF'
@@ -191,6 +193,17 @@ scp_to "${SCRIPT_DIR}/amd.py" "/var/lib/asterisk/agi-bin/amd.py"
 remote "chmod +x /var/lib/asterisk/agi-bin/amd.py && \
     python3 -m py_compile /var/lib/asterisk/agi-bin/amd.py && \
     mkdir -p /var/log/amd"
+
+# Per-client gateway routing AGI — extensions.conf [gw-route] calls this, so a
+# server without it would fall back to voip-switch for every client.
+scp_to "${SCRIPT_DIR}/gateway_select.py" "/var/lib/asterisk/agi-bin/gateway_select.py"
+remote "chmod +x /var/lib/asterisk/agi-bin/gateway_select.py && \
+    python3 -m py_compile /var/lib/asterisk/agi-bin/gateway_select.py"
+
+# Routing test harness — included by extensions.conf, places no calls.
+#   asterisk -rx 'dialplan set global TESTIP <client ip>'
+#   asterisk -rx 'channel originate Local/s@gw-route-test application Wait 1'
+scp_to "${SCRIPT_DIR}/extensions_gwtest.conf" "/etc/asterisk/extensions_gwtest.conf"
 
 # ── Phase 6: iptables baseline ─────────────────────────────────────────────
 echo ""

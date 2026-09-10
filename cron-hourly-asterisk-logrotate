@@ -1,0 +1,5 @@
+#!/bin/sh
+# Check Asterisk log sizes every hour, not just once a day — a busy switch can
+# outgrow the 500M threshold well inside 24h. Shares the system state file, so
+# this never double-rotates with the daily run.
+exec /usr/sbin/logrotate /etc/logrotate.d/asterisk

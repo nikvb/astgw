@@ -34,6 +34,10 @@
       <input name="weight" type="number" value="1" min="1" max="100" required
         style="width:100%;padding:0.5rem;background:#334155;border:1px solid #475569;border-radius:4px;color:#e2e8f0;" />
     </label>
+    <label style="display:flex;align-items:center;gap:0.5rem;margin-bottom:1.5rem;color:#94a3b8;font-size:0.85rem;">
+      <input name="is_default" type="checkbox" value="1" style="width:auto;" />
+      Make this the default gateway (used by clients with no gateway assigned)
+    </label>
     <button type="submit"
       style="width:100%;padding:0.5rem;background:#16a34a;color:white;border:none;border-radius:4px;cursor:pointer;font-size:1rem;">
       Add Gateway
