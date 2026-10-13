@@ -27,6 +27,12 @@
         </span>
       </span>
 
+      <span style="color:#94a3b8;">AMD Reject:</span>
+      <span style="font-family:monospace;color:#f472b6;">
+        SIP {data.client.amd_reject || '603'}
+        {data.client.amd_reject === '403' ? 'Forbidden' : 'Decline'}
+      </span>
+
       <span style="color:#94a3b8;">Created:</span>
       <span style="color:#94a3b8;">{new Date(data.client.created_at).toLocaleString()}</span>
     </div>
@@ -57,6 +63,29 @@
         </button>
       </form>
     {/if}
+  </div>
+
+  <!-- AMD reject status -->
+  <div style="background:#1e293b;padding:1.5rem;border-radius:6px;margin-top:1.5rem;">
+    <h2 style="font-size:1.05rem;margin-bottom:0.25rem;">AMD Reject Status</h2>
+    <p style="color:#94a3b8;font-size:0.8rem;margin-bottom:1rem;">
+      The SIP status this client receives when AMD detects an answering machine.
+      AstGW sends <code style="color:#93c5fd;">603 Decline</code> by default.
+      Choose <code style="color:#93c5fd;">403 Forbidden</code> for a client whose
+      dialer treats 603 as a do-not-call signal.
+    </p>
+
+    <form method="POST" action="?/set_amd_reject" style="display:flex;align-items:center;gap:0.5rem;">
+      <label style="color:#94a3b8;font-size:0.85rem;">On machine:</label>
+      <select name="amd_reject" style="background:#0f172a;color:#e2e8f0;border:1px solid #334155;border-radius:4px;padding:0.3rem 0.5rem;">
+        <option value="603" selected={data.client.amd_reject !== '403'}>603 Decline (default)</option>
+        <option value="403" selected={data.client.amd_reject === '403'}>403 Forbidden</option>
+      </select>
+      <button type="submit"
+        style="padding:0.3rem 0.75rem;background:#2563eb;color:white;border:none;border-radius:4px;cursor:pointer;font-size:0.85rem;">
+        Save
+      </button>
+    </form>
   </div>
 
   <!-- Gateways -->
