@@ -24,10 +24,21 @@
       <input name="ip" placeholder="e.g. 192.168.1.100" required pattern={"\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}(/\\d{1,2})?"}
         style="width:100%;padding:0.5rem;background:#334155;border:1px solid #475569;border-radius:4px;color:#e2e8f0;" />
     </label>
-    <label style="display:block;margin-bottom:1.5rem;">
+    <label style="display:block;margin-bottom:1rem;">
       <span style="display:block;margin-bottom:0.25rem;color:#94a3b8;font-size:0.85rem;">Tech Prefix</span>
       <input name="tech_prefix" placeholder="e.g. 777#" required
         style="width:100%;padding:0.5rem;background:#334155;border:1px solid #475569;border-radius:4px;color:#e2e8f0;" />
+    </label>
+    <label style="display:block;margin-bottom:1.5rem;">
+      <span style="display:block;margin-bottom:0.25rem;color:#94a3b8;font-size:0.85rem;">AMD Reject Status</span>
+      <select name="amd_reject"
+        style="width:100%;padding:0.5rem;background:#334155;border:1px solid #475569;border-radius:4px;color:#e2e8f0;">
+        <option value="603" selected>603 Decline (default)</option>
+        <option value="403">403 Forbidden</option>
+      </select>
+      <span style="display:block;margin-top:0.25rem;color:#64748b;font-size:0.75rem;">
+        SIP status returned to this client when AMD detects an answering machine.
+      </span>
     </label>
     <button type="submit"
       style="width:100%;padding:0.5rem;background:#16a34a;color:white;border:none;border-radius:4px;cursor:pointer;font-size:1rem;">

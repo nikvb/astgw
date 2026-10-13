@@ -15,6 +15,8 @@ from the DB, and sets dialplan variables for routing:
   GW_MODE   = weighted | failover | default | none
   GW_COUNT  = number of gateway endpoints to try (0 = none)
   GW_1..GW_N = PJSIP endpoint names, in the order to try them
+  AMD_REJECT = 603 | 403 — the SIP status this client gets on AMD MACHINE
+               (inherited to the outbound leg, set as __AMD_REJECT)
 
 - weighted : GW_COUNT=1, one gateway chosen by weighted-random (load balance)
 - failover : GW_COUNT=N, gateways in priority order (dialplan tries each)
@@ -121,7 +123,29 @@ def psql(query):
     return [ln.strip() for ln in result.stdout.strip().splitlines() if ln.strip()]
 
 
+# --- AMD reject status ---
+# Every call must leave here with AMD_REJECT set, including the early exits,
+# so the dialplan never has to guess. '603' keeps the behaviour AstGW had
+# before this variable existed.
+AMD_REJECT_DEFAULT = "603"
+AMD_REJECT_VALID = ("403", "603")
+_amd_reject_sent = False
+
+
+def set_amd_reject(value):
+    """Set __AMD_REJECT once, falling back to the default on any bad value."""
+    global _amd_reject_sent
+    if _amd_reject_sent:
+        return
+    code = (value or "").strip()
+    if code not in AMD_REJECT_VALID:
+        code = AMD_REJECT_DEFAULT
+    agi_set("__AMD_REJECT", code)
+    _amd_reject_sent = True
+
+
 def no_gateways(mode="none"):
+    set_amd_reject(AMD_REJECT_DEFAULT)
     agi_set("GW_MODE", mode)
     agi_set("GW_COUNT", "0")
     sys.exit(0)
@@ -129,6 +153,7 @@ def no_gateways(mode="none"):
 
 def use_default_gateway(reason):
     """Legacy client (no assignment) -> the gateway flagged is_default."""
+    set_amd_reject(AMD_REJECT_DEFAULT)
     rows = psql("SELECT name, COALESCE(endpoint, '') FROM gateways "
                 "WHERE is_default = true AND enabled = true LIMIT 1")
     if not rows:
@@ -159,13 +184,16 @@ try:
         use_default_gateway("no CLIENT_IP passed")
 
     # Resolve client by source IP
-    rows = psql("SELECT id, COALESCE(gateway_mode,'weighted') FROM clients "
-                "WHERE ip = '{}' LIMIT 1".format(client_ip.replace("'", "")))
+    rows = psql("SELECT id, COALESCE(gateway_mode,'weighted'), "
+                "COALESCE(amd_reject,'{}') FROM clients "
+                "WHERE ip = '{}' LIMIT 1".format(
+                    AMD_REJECT_DEFAULT, client_ip.replace("'", "")))
     if not rows:
         use_default_gateway("no client for IP {}".format(client_ip))
 
     parts0 = rows[0].split("\t")
     client_id, mode = parts0[0], parts0[1]
+    set_amd_reject(parts0[2] if len(parts0) > 2 else AMD_REJECT_DEFAULT)
     if mode not in ("weighted", "failover"):
         mode = "weighted"
 

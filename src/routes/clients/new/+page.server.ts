@@ -10,6 +10,9 @@ export const actions: Actions = {
     const name = (data.get("name") as string || "").trim();
     const ip = (data.get("ip") as string || "").trim();
     const tech_prefix = (data.get("tech_prefix") as string || "").trim();
+    // SIP status this client gets when AMD detects a machine. 603 is the
+    // long-standing AstGW behaviour, so it is the default.
+    const amd_reject = (data.get("amd_reject") as string) === "403" ? "403" : "603";
 
     if (!name || !ip || !tech_prefix) return fail(400, { error: "All fields required" });
     if (!/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(ip)) return fail(400, { error: "Invalid IP address" });
@@ -19,8 +22,8 @@ export const actions: Actions = {
     try {
       // Insert into portal table
       await db.query(
-        "INSERT INTO clients (name, ip, tech_prefix) VALUES ($1, $2, $3)",
-        [name, ip, tech_prefix]
+        "INSERT INTO clients (name, ip, tech_prefix, amd_reject) VALUES ($1, $2, $3, $4)",
+        [name, ip, tech_prefix, amd_reject]
       );
 
       // Insert PJSIP Realtime records
