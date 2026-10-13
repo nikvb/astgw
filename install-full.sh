@@ -70,7 +70,10 @@ remote "export DEBIAN_FRONTEND=noninteractive && apt-get update -q && apt-get in
     iptables-persistent wget curl"
 
 echo ">> Installing Python packages ..."
-remote "pip3 install --break-system-packages pyst2 websocket-client"
+# --break-system-packages needs pip 23+. Ubuntu 22.04 ships pip 22, where the
+# flag is an error and set -e would abort the install, so fall back.
+remote "pip3 install --break-system-packages pyst2 websocket-client || \
+    pip3 install pyst2 websocket-client"
 
 # ── Phase 2: PostgreSQL setup ─────────────────────────────────────────────────
 echo ""
@@ -102,13 +105,40 @@ CREATE TABLE IF NOT EXISTS admin_users (
     created_at    TIMESTAMP DEFAULT now()
 );
 CREATE TABLE IF NOT EXISTS clients (
-    id          SERIAL PRIMARY KEY,
-    name        VARCHAR(100) NOT NULL,
-    ip          VARCHAR(45)  NOT NULL UNIQUE,
-    tech_prefix VARCHAR(50)  NOT NULL,
-    enabled     BOOLEAN DEFAULT true,
-    created_at  TIMESTAMP DEFAULT now()
+    id           SERIAL PRIMARY KEY,
+    name         VARCHAR(100) NOT NULL,
+    ip           VARCHAR(45)  NOT NULL UNIQUE,
+    tech_prefix  VARCHAR(50)  NOT NULL,
+    enabled      BOOLEAN DEFAULT true,
+    created_at   TIMESTAMP DEFAULT now(),
+    gateway_mode VARCHAR(16) DEFAULT 'weighted',
+    amd_reject   VARCHAR(3) NOT NULL DEFAULT '603'
+        CONSTRAINT clients_amd_reject_valid CHECK (amd_reject IN ('403', '603'))
 );
+-- Upstream SIP peers. endpoint = the PJSIP endpoint to dial; NULL means
+-- 'gateway-<slug>'. is_default = used by any client with no assignment.
+CREATE TABLE IF NOT EXISTS gateways (
+    id         SERIAL PRIMARY KEY,
+    name       VARCHAR(100) NOT NULL,
+    ip         VARCHAR(45)  NOT NULL UNIQUE,
+    port       INTEGER      NOT NULL DEFAULT 5060,
+    weight     INTEGER      NOT NULL DEFAULT 1,
+    enabled    BOOLEAN      NOT NULL DEFAULT true,
+    created_at TIMESTAMP    NOT NULL DEFAULT now(),
+    endpoint   VARCHAR(100),
+    is_default BOOLEAN      NOT NULL DEFAULT false
+);
+CREATE UNIQUE INDEX IF NOT EXISTS gateways_single_default
+    ON gateways (is_default) WHERE is_default;
+CREATE TABLE IF NOT EXISTS client_gateways (
+    id         SERIAL PRIMARY KEY,
+    client_id  INTEGER NOT NULL REFERENCES clients(id)  ON DELETE CASCADE,
+    gateway_id INTEGER NOT NULL REFERENCES gateways(id) ON DELETE CASCADE,
+    weight     INTEGER DEFAULT 1,
+    priority   INTEGER DEFAULT 1,
+    UNIQUE (client_id, gateway_id)
+);
+CREATE INDEX IF NOT EXISTS idx_client_gateways_client ON client_gateways(client_id);
 CREATE TABLE IF NOT EXISTS servers (
     id         SERIAL PRIMARY KEY,
     name       VARCHAR(100) NOT NULL,
@@ -246,6 +276,23 @@ CFGEOF
 # pjsip.conf and extensions.conf from local files
 scp_to "${SCRIPT_DIR}/pjsip.conf" "/etc/asterisk/pjsip.conf"
 scp_to "${SCRIPT_DIR}/extensions.conf" "/etc/asterisk/extensions.conf"
+
+# Per-client gateway routing AGI. [gw-route] in extensions.conf calls this, so
+# a node without it falls back to voip-switch for every client.
+scp_to "${SCRIPT_DIR}/gateway_select.py" "/var/lib/asterisk/agi-bin/gateway_select.py"
+remote "mkdir -p /var/lib/asterisk/agi-bin && \
+    chmod +x /var/lib/asterisk/agi-bin/gateway_select.py && \
+    python3 -m py_compile /var/lib/asterisk/agi-bin/gateway_select.py"
+
+# Routing test harness. extensions.conf includes it, so the include fails
+# without this file. It places no calls.
+scp_to "${SCRIPT_DIR}/extensions_gwtest.conf" "/etc/asterisk/extensions_gwtest.conf"
+
+# Log rotation. full.log grows without it; one node reached 58 GB.
+scp_to "${SCRIPT_DIR}/logrotate-asterisk" "/etc/logrotate.d/asterisk"
+scp_to "${SCRIPT_DIR}/cron-hourly-asterisk-logrotate" "/etc/cron.hourly/asterisk-logrotate"
+remote "chmod 0644 /etc/logrotate.d/asterisk && \
+    chmod 0755 /etc/cron.hourly/asterisk-logrotate"
 
 # amd.conf
 remote "cat > /etc/asterisk/amd.conf" << 'CFGEOF'
