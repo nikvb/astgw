@@ -1,6 +1,6 @@
 import { fail, redirect } from "@sveltejs/kit";
 import db from "$lib/db";
-import { gatewaySlug, addGatewayPjsip } from "$lib/ssh";
+import { gatewaySlug, slugTakenBy, upsertGatewayEndpoint } from "$lib/gateways";
 import type { Actions } from "./$types";
 
 export const actions: Actions = {
@@ -20,27 +20,34 @@ export const actions: Actions = {
     if (isNaN(weight) || weight < 1 || weight > 100) return fail(400, { error: "Weight must be 1–100" });
 
     const slug = gatewaySlug(name);
+    if (slug === "gateway-") return fail(400, { error: "Name must contain a letter or a digit" });
+    const taken = await slugTakenBy(slug);
+    if (taken) return fail(400, { error: `Name gives the same endpoint id (${slug}) as gateway "${taken}"` });
 
+    // Gateway row + its realtime endpoint/AOR in one transaction: Asterisk sees
+    // the gateway as soon as this commits, on every server using this DB.
+    const client = await db.connect();
     try {
-      const inserted = await db.query(
+      await client.query("BEGIN");
+      const inserted = await client.query(
         "INSERT INTO gateways (name, ip, port, weight) VALUES ($1, $2, $3, $4) RETURNING id",
         [name, ip, port, weight]
       );
 
       // Optionally make it the route for clients with no gateway of their own.
       if (makeDefault) {
-        await db.query("UPDATE gateways SET is_default = false WHERE is_default = true");
-        await db.query("UPDATE gateways SET is_default = true WHERE id = $1", [inserted.rows[0].id]);
+        await client.query("UPDATE gateways SET is_default = false WHERE is_default = true");
+        await client.query("UPDATE gateways SET is_default = true WHERE id = $1", [inserted.rows[0].id]);
       }
 
-      // Push PJSIP config to all enabled Asterisk servers
-      const servers = await db.query("SELECT ip FROM servers WHERE enabled = true");
-      for (const srv of servers.rows) {
-        try { await addGatewayPjsip(srv.ip, slug, ip, port); } catch {}
-      }
+      await upsertGatewayEndpoint(client, slug, ip, port);
+      await client.query("COMMIT");
     } catch (e: any) {
+      await client.query("ROLLBACK");
       if (e.code === "23505") return fail(400, { error: "A gateway with this IP already exists" });
       return fail(500, { error: e.message });
+    } finally {
+      client.release();
     }
 
     throw redirect(302, "/gateways");

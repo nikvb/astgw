@@ -2,7 +2,7 @@ import db from "$lib/db";
 import { sshExec } from "$lib/ssh";
 
 /** PJSIP endpoint id of the VOIP switch — a realtime endpoint, not a
- *  pjsip_gateways.conf block, so it is kept in sync here rather than over SSH. */
+ *  portal gateway (see gateways.ts); it is synced here, not by gateways.ts. */
 export const SWITCH_ENDPOINT = "voip-switch";
 
 /**
