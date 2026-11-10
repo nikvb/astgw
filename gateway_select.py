@@ -117,7 +117,9 @@ def psql(query):
     result = subprocess.run(
         ["psql", "-h", DB_HOST, "-p", DB_PORT, "-U", DB_USER, "-d", DB_NAME,
          "-t", "-A", "-F", "\t", "-c", query],
-        capture_output=True, text=True,
+        # PIPE + universal_newlines = capture_output + text, but also runs on
+        # Python 3.6 (CentOS 7 standalone nodes).
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True,
         env={**os.environ, "PGPASSWORD": DB_PASS, "LC_ALL": "C"},
     )
     return [ln.strip() for ln in result.stdout.strip().splitlines() if ln.strip()]
