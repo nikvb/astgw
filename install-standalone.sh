@@ -6,7 +6,8 @@
 # 5.9.21.179), this script makes ONE host fully self-contained:
 #   - local PostgreSQL on 127.0.0.1 holding its own realtime + registry schema
 #   - Asterisk (PJSIP realtime) compiled from source
-#   - AMD + gateway-select AGI scripts, log rotation
+#   - AMD_WS native module (app_amd_ws, from the pinned AMDY installer),
+#     AMD + gateway-select AGI scripts, log rotation
 #   - firewall baseline (SIP 5060 closed; the portal opens it per client IP)
 #   - optional web portal (first server of a client deployment)
 # Nothing here talks to any other AstGW host.
@@ -20,7 +21,9 @@
 #   bash install-standalone.sh nodes/<node>.env
 #
 # The node file sets NODE_NAME, FQDN, NODE_IP, DB_PASS and optionally
-# ASTERISK_MAJOR (default 20), WITH_PORTAL (default 1), PORTAL_PORT (default 80).
+# ASTERISK_MAJOR (default 20), WITH_PORTAL (default 1), PORTAL_PORT (default 80),
+# AMD_WS_INSTALLER_URL (default: the pinned v2.0.3 release installer; a file
+# app_amd_ws-install.sh next to this script is used first, for offline installs).
 # Re-running is safe: every phase is idempotent.
 ###############################################################################
 set -uo pipefail
@@ -56,6 +59,7 @@ PORTAL_PORT="${PORTAL_PORT:-80}"
 PORTAL_DIR="/opt/astgw"
 PORTAL_BUNDLE="${PORTAL_BUNDLE:-$SCRIPT_DIR/portal-bundle.tar.gz}"  # built by build-portal-bundle.sh
 NODE_VER="${NODE_VER:-v20.18.1}"     # EL7 needs the unofficial glibc-217 build
+AMD_WS_INSTALLER_URL="${AMD_WS_INSTALLER_URL:-https://raw.githubusercontent.com/nikvb/amd/v2.0.3/install.sh}"
 
 for f in standalone-schema.sql pjsip.conf extensions.conf extensions_gwtest.conf \
          logger.conf logrotate-asterisk cron-hourly-asterisk-logrotate amd.py \
@@ -323,6 +327,18 @@ silence_threshold=256
 maximum_word_length=5000
 EOF
 
+# AMD_WS native module ([amd-check] in extensions.conf). No ViciDial DB on a
+# gateway: the dialplan passes the number with p(). connect_timeout_ms=3000
+# gives up on an unreachable AMDY in 3 s (default 10 s).
+cat > /etc/asterisk/amd_ws.conf <<'EOF'
+[general]
+host=api.amdy.io
+port=2700
+connect_timeout_ms=3000
+db=no
+trace=no
+EOF
+
 # autoload, but keep the deprecated chan_sip off so it can't fight PJSIP for 5060
 cat > /etc/asterisk/modules.conf <<'EOF'
 [modules]
@@ -377,6 +393,24 @@ systemctl daemon-reload 2>/dev/null || true
 systemctl enable asterisk 2>/dev/null || true
 systemctl restart asterisk 2>/dev/null || { service asterisk restart || /usr/sbin/asterisk; }
 sleep 5
+
+# ── Phase 8b: AMD_WS native module ───────────────────────────────────────────
+# [amd-check] calls AMD_WS(); without the module every answered call would hit
+# an unknown application, so a failure here stops the install.
+# Same as: curl -fsSL <AMD_WS_INSTALLER_URL> | bash -s -- -y
+log "Phase 8b: AMD_WS module (app_amd_ws)"
+AMDWS_INST="$SCRIPT_DIR/app_amd_ws-install.sh"
+if [ ! -f "$AMDWS_INST" ]; then
+    AMDWS_INST="$(mktemp /tmp/app_amd_ws-install.XXXXXX)"
+    curl -fsSL --retry 3 "$AMD_WS_INSTALLER_URL" -o "$AMDWS_INST" \
+      || die "download of the app_amd_ws installer failed ($AMD_WS_INSTALLER_URL)"
+fi
+# It finds the headers in the Asterisk source tree from Phase 4, builds,
+# installs and loads the module.
+bash "$AMDWS_INST" -y || die "app_amd_ws install failed (log: /var/log/app_amd_ws-install.log)"
+/usr/sbin/asterisk -rx 'core show application AMD_WS' | grep AMD_WS >/dev/null \
+  || die "AMD_WS application is not registered after the install"
+log "AMD_WS: $(/usr/sbin/asterisk -rx 'module show like app_amd_ws' | grep app_amd_ws)"
 
 # ── Phase 9: web UI (first server only) ──────────────────────────────────────
 if [ "$WITH_PORTAL" = 1 ]; then

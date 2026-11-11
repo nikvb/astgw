@@ -31,8 +31,10 @@ Ask the customer for these four items.
 3. **Tech prefix** - the digits AstGW puts in front of the dialled number when
    it sends the call to the gateway.
 4. **AMD reject status** - the SIP status the customer receives when AMD
-   detects an answering machine. `603` Decline is the default. Choose `403`
-   Forbidden only when the customer's dialer treats 603 as do-not-call.
+   detects an answering machine. `603` Decline is the default. The portal
+   list also offers 403, 480, 486, 600, 605 (non-standard marker), 607 and
+   608; the database accepts any 400-699. Choose another code when the
+   customer's dialer treats 603 as do-not-call or wants a unique AMD marker.
 
 Ask about gateways as well. A client with no gateway assigned uses the default
 gateway. A client with gateways assigned uses only those gateways.
@@ -126,10 +128,13 @@ server. Do not delete rows by hand, because the firewall rules stay behind.
 - **Routing**: `[from-clients]` reads the source IP from
   `ps_endpoint_id_ips`, then goes to `[gw-route]`. `[gw-route]` calls
   `gateway_select.py`, which sets `GW_*` and `__AMD_REJECT` from the database.
-- **AMD rejection**: the dialplan cannot choose a SIP status. It hangs up with
-  a Q.850 cause, and `hangup_cause2sip()` in `channels/chan_pjsip.c` maps it.
-  Cause 21 gives 403 Forbidden. Cause 16 has no entry, so chan_pjsip returns 0
-  and `ast_sip_session_terminate()` uses its fallback, 603 Decline.
+- **AMD rejection**: `[gw-route]` label `amdreject` runs
+  `PJSIPHangup(${AMD_REJECT})`, which sends that exact SIP status to the
+  still-unanswered client leg (Asterisk 18.21 / 20.6 / 21.1 or later).
+  `Hangup(16)` after it (603 Decline) runs only if PJSIPHangup is refused.
+- **AMD detection**: `[amd-check]` runs the native `AMD_WS()` module
+  (app_amd_ws, settings in `/etc/asterisk/amd_ws.conf`) with
+  `p(${DIALED})k(1)`. `amd.py` (EAGI) stays installed as a fallback.
 - **Where the code is**: the portal source is `/home/na/astgw-files` on the
   workstation and `/root/astgw` on primo-amd01. Rebuild with `npm run build`
   and restart with `pm2 restart astgw`.
