@@ -1,6 +1,7 @@
 import { fail, redirect } from "@sveltejs/kit";
 import db from "$lib/db";
 import { removeFirewallRule } from "$lib/ssh";
+import { parseAmdReject } from "$lib/amdReject";
 import { unregisterClientIp, updateClientIp } from "$lib/portal";
 import type { PageServerLoad, Actions } from "./$types";
 
@@ -88,11 +89,11 @@ export const actions: Actions = {
     return { success: true };
   },
 
-  // SIP status this client receives when AMD detects an answering machine.
-  // The dialplan turns it into a Q.850 cause: 603 -> cause 16, 403 -> cause 21.
+  // SIP status (400-699) this client receives when AMD detects an answering
+  // machine. The dialplan sends it with PJSIPHangup(${AMD_REJECT}).
   set_amd_reject: async ({ params, request }) => {
     const data = await request.formData();
-    const amd_reject = (data.get("amd_reject") as string) === "403" ? "403" : "603";
+    const amd_reject = parseAmdReject(data.get("amd_reject"));
     await db.query("UPDATE clients SET amd_reject = $1 WHERE id = $2", [amd_reject, params.id]);
     return { success: true };
   },

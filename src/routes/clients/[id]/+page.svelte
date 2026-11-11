@@ -1,5 +1,12 @@
 <script lang="ts">
+  import { AMD_REJECT_CODES, AMD_REJECT_DEFAULT, amdRejectLabel } from "$lib/amdReject";
   let { data } = $props();
+  // A stored code that is not in the list (set by hand) still shows as selected.
+  let rejectCodes = $derived(
+    AMD_REJECT_CODES.some((o) => o.code === (data.client.amd_reject || AMD_REJECT_DEFAULT))
+      ? AMD_REJECT_CODES
+      : [...AMD_REJECT_CODES, { code: data.client.amd_reject, label: data.client.amd_reject }]
+  );
   let confirming = $state(false);
 </script>
 
@@ -29,8 +36,7 @@
 
       <span style="color:#94a3b8;">AMD Reject:</span>
       <span style="font-family:monospace;color:#f472b6;">
-        SIP {data.client.amd_reject || '603'}
-        {data.client.amd_reject === '403' ? 'Forbidden' : 'Decline'}
+        SIP {amdRejectLabel(data.client.amd_reject)}
       </span>
 
       <span style="color:#94a3b8;">Created:</span>
@@ -78,8 +84,9 @@
     <form method="POST" action="?/set_amd_reject" style="display:flex;align-items:center;gap:0.5rem;">
       <label style="color:#94a3b8;font-size:0.85rem;">On machine:</label>
       <select name="amd_reject" style="background:#0f172a;color:#e2e8f0;border:1px solid #334155;border-radius:4px;padding:0.3rem 0.5rem;">
-        <option value="603" selected={data.client.amd_reject !== '403'}>603 Decline (default)</option>
-        <option value="403" selected={data.client.amd_reject === '403'}>403 Forbidden</option>
+        {#each rejectCodes as o}
+          <option value={o.code} selected={o.code === (data.client.amd_reject || AMD_REJECT_DEFAULT)}>{o.label}</option>
+        {/each}
       </select>
       <button type="submit"
         style="padding:0.3rem 0.75rem;background:#2563eb;color:white;border:none;border-radius:4px;cursor:pointer;font-size:0.85rem;">

@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { ActionData } from "./$types";
+  import { AMD_REJECT_CODES, AMD_REJECT_DEFAULT } from "$lib/amdReject";
   let { form }: { form: ActionData } = $props();
 </script>
 
@@ -33,8 +34,9 @@
       <span style="display:block;margin-bottom:0.25rem;color:#94a3b8;font-size:0.85rem;">AMD Reject Status</span>
       <select name="amd_reject"
         style="width:100%;padding:0.5rem;background:#334155;border:1px solid #475569;border-radius:4px;color:#e2e8f0;">
-        <option value="603" selected>603 Decline (default)</option>
-        <option value="403">403 Forbidden</option>
+        {#each AMD_REJECT_CODES as o}
+          <option value={o.code} selected={o.code === AMD_REJECT_DEFAULT}>{o.label}</option>
+        {/each}
       </select>
       <span style="display:block;margin-top:0.25rem;color:#64748b;font-size:0.75rem;">
         SIP status returned to this client when AMD detects an answering machine.

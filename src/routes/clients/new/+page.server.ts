@@ -2,6 +2,7 @@ import { fail, redirect } from "@sveltejs/kit";
 import db from "$lib/db";
 import { addFirewallRule } from "$lib/ssh";
 import { registerClientIp } from "$lib/portal";
+import { parseAmdReject } from "$lib/amdReject";
 import type { Actions } from "./$types";
 
 export const actions: Actions = {
@@ -10,9 +11,9 @@ export const actions: Actions = {
     const name = (data.get("name") as string || "").trim();
     const ip = (data.get("ip") as string || "").trim();
     const tech_prefix = (data.get("tech_prefix") as string || "").trim();
-    // SIP status this client gets when AMD detects a machine. 603 is the
-    // long-standing AstGW behaviour, so it is the default.
-    const amd_reject = (data.get("amd_reject") as string) === "403" ? "403" : "603";
+    // SIP status (400-699) this client gets when AMD detects a machine.
+    // 603 is the long-standing AstGW behaviour, so it is the default.
+    const amd_reject = parseAmdReject(data.get("amd_reject"));
 
     if (!name || !ip || !tech_prefix) return fail(400, { error: "All fields required" });
     if (!/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(ip)) return fail(400, { error: "Invalid IP address" });

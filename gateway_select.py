@@ -15,7 +15,7 @@ from the DB, and sets dialplan variables for routing:
   GW_MODE   = weighted | failover | default | none
   GW_COUNT  = number of gateway endpoints to try (0 = none)
   GW_1..GW_N = PJSIP endpoint names, in the order to try them
-  AMD_REJECT = 603 | 403 — the SIP status this client gets on AMD MACHINE
+  AMD_REJECT = 400..699 — the SIP status this client gets on AMD MACHINE
                (inherited to the outbound leg, set as __AMD_REJECT)
 
 - weighted : GW_COUNT=1, one gateway chosen by weighted-random (load balance)
@@ -130,7 +130,6 @@ def psql(query):
 # so the dialplan never has to guess. '603' keeps the behaviour AstGW had
 # before this variable existed.
 AMD_REJECT_DEFAULT = "603"
-AMD_REJECT_VALID = ("403", "603")
 _amd_reject_sent = False
 
 
@@ -140,7 +139,7 @@ def set_amd_reject(value):
     if _amd_reject_sent:
         return
     code = (value or "").strip()
-    if code not in AMD_REJECT_VALID:
+    if not (len(code) == 3 and code.isdigit() and "400" <= code <= "699"):
         code = AMD_REJECT_DEFAULT
     agi_set("__AMD_REJECT", code)
     _amd_reject_sent = True
